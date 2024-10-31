@@ -1,0 +1,14 @@
+{
+	"name": "pdf2cources",
+	"id": "1433080240274556831",
+	"api": "1.0.0",
+	"main": "dist/code.js",
+	"capabilities": [],
+	"enableProposedApi": false,
+	"documentAccess": "dynamic-page",
+	"editorType": ["figma"],
+	"ui": "ui.html",
+	"networkAccess": {
+		"allowedDomains": ["none"]
+	}
+}

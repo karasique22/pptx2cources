@@ -1,0 +1,28 @@
+<h2>pptx2curces)</h2>
+<input type="file" id="load" accept=".pptx" />
+
+<script>
+	const loadButton = document.querySelector("#load");
+
+	loadButton.addEventListener("change", e => {
+		const file = loadButton.files[0];
+		const reader = new FileReader();
+
+		// Read file as ArrayBuffer to preserve binary integrity
+		reader.onload = () => {
+			const content = reader.result;
+
+			// Send ArrayBuffer content directly to plugin without modification
+			parent.postMessage(
+				{
+					pluginMessage: {
+						type: "file",
+						data: content,
+					},
+				},
+				"*"
+			);
+		};
+		reader.readAsArrayBuffer(file); // Ensure ArrayBuffer is used
+	});
+</script>
