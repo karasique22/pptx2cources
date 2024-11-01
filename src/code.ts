@@ -32,7 +32,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 			}
 
 			const slides = await parseSlides(zip);
-			await renderSlidesToFrames(slides);
+			await renderSlidesToFrames(slides, zip);
 		} catch (generalError) {
 			console.error(
 				"An error occurred in the file processing:",
@@ -49,17 +49,43 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 	);
 	console.log(`Found ${slidePaths.length} slides.`);
 
+	const relsPaths = Object.keys(zip.files).filter(path =>
+		path.startsWith("ppt/slides/_rels/slide")
+	);
+	console.log(`Found ${relsPaths.length} slide rels.`);
+
+	const slideToRelsMap: { [key: string]: string } = {};
+
+	for (const relsPath of relsPaths) {
+		const slideNumber = relsPath.match(/slide(\d+)/)?.[1];
+		if (slideNumber) {
+			slideToRelsMap[`ppt/slides/slide${slideNumber}.xml`] = relsPath;
+		}
+	}
+
 	for (const path of slidePaths) {
+		const relsPath = slideToRelsMap[path];
 		try {
 			const slideFile = zip.file(path);
+			const relsFile = zip.file(relsPath);
+
 			if (!slideFile) {
 				console.warn(`Slide file not found at path: ${path}`);
+				continue;
+			}
+
+			if (!relsFile) {
+				console.warn(`Slide rels file not found at path: ${relsPath}`);
 				continue;
 			}
 
 			const slideContent = await slideFile.async("text");
 			const slideData = await parseStringPromise(slideContent);
 			console.log(`Parsed slide: ${path}`);
+
+			const relsContent = await relsFile.async("text");
+			const relsData = await parseStringPromise(relsContent);
+			console.log(`Parsed rels: ${relsPath}`);
 
 			let title = "";
 			const paragraphs: string[] = [];
@@ -78,30 +104,32 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 							const text =
 								paragraph?.["a:r"]?.[0]?.["a:t"]?.[0] || "";
 							if (!title && text) title = text;
-							paragraphs.push(text);
+							else paragraphs.push(text);
 						}
 					}
 				}
 			}
 
-			const pictures =
-				slideData?.["p:sld"]?.["p:cSld"]?.[0]?.["p:spTree"]?.[0]?.[
-					"p:pic"
-				] || [];
-			for (const picture of pictures) {
-				const blip = picture?.["a:blipFill"]?.[0]?.["a:blip"];
-				const imageId = blip?.[0]?.["$"]?.["r:embed"];
-				const imagePath = `ppt/media/${imageId}.jpeg`;
-				const imageFile = imageId ? zip.file(imagePath) : null;
+			const relationships =
+				relsData?.["Relationships"]?.["Relationship"] || [];
+			for (const relationship of relationships) {
+				if (
+					relationship.$.Type ===
+					"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+				) {
+					const imagePath = `ppt/${relationship.$.Target.replace(
+						"../",
+						""
+					)}`;
 
-				if (imageFile) {
-					const imageData = await imageFile.async("base64");
-					images.push(`data:image/jpeg;base64,${imageData}`);
-					console.log(`Image extracted for slide: ${path}`);
-				} else {
-					console.warn(
-						`Image file not found or imageId is missing for path: ${imagePath}`
-					);
+					if (imagePath) {
+						images.push(`${imagePath}`);
+						console.log(`Image extracted for slide: ${path}`);
+					} else {
+						console.warn(
+							`Image file not found for path: ${imagePath}`
+						);
+					}
 				}
 			}
 
@@ -120,69 +148,137 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 	return slides;
 }
 
-async function renderSlidesToFrames(slides: SlideData[]) {
-	let xPosition = 0;
-	let yPosition = 0;
+// const nullPaint = figma.createPaintStyle();
+
+async function renderSlidesToFrames(slides: SlideData[], zip: JSZip) {
+	// let yPosition = 0;
+	// let xPosition = 0;
+
+	const section = figma.createSection();
+	figma.currentPage.appendChild(section);
+	section.name = zip.name?.match(/[0-9]/g)?.join("") ?? "Slides";
+	console.log(`Created section: ${zip.name}`);
+	section.resizeWithoutConstraints(2120, 1080);
+	// section.setFillStyleIdAsync(nullPaint.id);
+
+	const parentFrame = figma.createFrame();
+	section.appendChild(parentFrame);
+	parentFrame.layoutMode = "VERTICAL";
+	parentFrame.layoutSizingHorizontal = "HUG";
+	parentFrame.layoutSizingVertical = "HUG";
+	parentFrame.itemSpacing = 60;
 
 	for (const [index, slide] of slides.entries()) {
 		const frame = figma.createFrame();
+		parentFrame.appendChild(frame);
+		frame.name = `${index + 2}`;
 		frame.resize(1920, 1080);
-		frame.x = xPosition;
-		frame.y = yPosition;
-		frame.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }];
-		figma.currentPage.appendChild(frame);
+		frame.layoutMode = "VERTICAL";
+		frame.layoutSizingHorizontal = "FIXED";
+		frame.layoutSizingVertical = "FIXED";
+		frame.verticalPadding = 80;
+		frame.horizontalPadding = 80;
+		frame.itemSpacing = 30;
 
-		// Load and apply title font
-		(async () => {
-			const titleText = figma.createText();
-			await figma.loadFontAsync({ family: "Roboto", style: "ExtraBold" });
-			titleText.fontName = { family: "Roboto", style: "ExtraBold" };
-			titleText.characters = slide.title;
-			titleText.fontSize = 48;
-			titleText.fills = [
-				{ type: "SOLID", color: { r: 43, g: 54, b: 116 } },
-			];
-			titleText.x = 80; // Margin from left
-			titleText.y = 80; // Margin from top
-			frame.appendChild(titleText);
-		})();
+		const titleFrame = figma.createFrame();
+		frame.appendChild(titleFrame);
+		titleFrame.layoutMode = "VERTICAL";
+		titleFrame.layoutSizingHorizontal = "FILL";
+		titleFrame.layoutSizingVertical = "HUG";
+		titleFrame.itemSpacing = 25;
 
-		async () => {
-			await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
-			const bodyText = figma.createText();
-			bodyText.fontName = { family: "Roboto", style: "Regular" };
-			bodyText.characters = slide.text;
-			bodyText.fontSize = 36;
-			bodyText.fills = [{ type: "SOLID", color: { r: 0, g: 0, b: 0 } }];
-			bodyText.x = 80;
-			bodyText.y = bodyText.y + bodyText.height + 40;
-			frame.appendChild(bodyText);
+		const titleText = figma.createText();
+		titleFrame.appendChild(titleText);
+		await figma.loadFontAsync({ family: "Roboto", style: "ExtraBold" });
+		titleText.fontName = { family: "Roboto", style: "ExtraBold" };
+		titleText.characters = slide.title;
+		titleText.fontSize = 48;
+		titleText.fills = [
+			{
+				type: "SOLID",
+				color: { r: 0.176, g: 0.212, b: 0.455 },
+			},
+		];
+		titleText.lineHeight = {
+			value: 140,
+			unit: "PERCENT",
 		};
+		titleText.layoutSizingHorizontal = "FILL";
+		titleText.layoutSizingHorizontal = "HUG";
 
-		let imageYPosition = frame.y + frame.height + 40;
-		for (const imageData of slide.images) {
-			const image = figma.createImage(
-				Uint8Array.from(atob(imageData.split(",")[1]), c =>
-					c.charCodeAt(0)
-				)
-			);
-			const imageNode = figma.createRectangle();
-			imageNode.resize(400, 300);
-			imageNode.fills = [
-				{ type: "IMAGE", scaleMode: "FILL", imageHash: image.hash },
-			];
-			imageNode.x = 80;
-			imageNode.y = imageYPosition;
-			frame.appendChild(imageNode);
+		const bodyFrame = figma.createFrame();
+		frame.appendChild(bodyFrame);
+		bodyFrame.layoutMode = "VERTICAL";
+		bodyFrame.layoutSizingHorizontal = "FILL";
+		bodyFrame.layoutSizingVertical = "FILL";
+		bodyFrame.itemSpacing = 25;
 
-			imageYPosition += imageNode.height + 20;
+		// Render body text
+		const bodyText = figma.createText();
+		bodyFrame.appendChild(bodyText);
+		await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
+		bodyText.fontName = { family: "Roboto", style: "Regular" };
+		bodyText.characters = slide.text;
+		bodyText.fontSize = 36;
+		bodyText.fills = [
+			{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
+		];
+		bodyText.lineHeight = {
+			value: 120,
+			unit: "PERCENT",
+		};
+		bodyText.resize(1920, 1080);
+		bodyText.layoutSizingHorizontal = "FILL";
+		bodyText.layoutSizingVertical = "HUG";
+
+		let picFrame;
+		if (slide.images.length > 1) {
+			picFrame = figma.createFrame();
+			bodyFrame.appendChild(picFrame);
+			picFrame.layoutMode = "HORIZONTAL";
+			picFrame.layoutSizingHorizontal = "FILL";
+			picFrame.layoutSizingVertical = "FILL";
+			picFrame.itemSpacing = 30;
 		}
+		for (const imagePath of slide.images) {
+			const imageFile = zip.file(`${imagePath}`);
+			if (imageFile) {
+				const imageData = await imageFile.async("uint8array");
 
-		yPosition += 1080 + 60;
+				// Логирование типа изображения
+				const imageType = imagePath.split(".").pop();
+				// console.log(`Loading image: ${imagePath}, Type: ${imageType}`);
 
-		if (index === slides.length - 1) {
-			yPosition = 0;
-			xPosition += 1920 + 240;
+				// Проверка поддерживаемых форматов
+				if (
+					imageType === "png" ||
+					imageType === "jpeg" ||
+					imageType === "jpg"
+				) {
+					const image = figma.createImage(imageData);
+					const imageNode = figma.createRectangle();
+					picFrame
+						? picFrame.appendChild(imageNode)
+						: bodyFrame.appendChild(imageNode);
+					imageNode.cornerRadius = 30;
+					imageNode.layoutSizingHorizontal = "FILL";
+					imageNode.layoutSizingVertical = "FILL";
+
+					imageNode.fills = [
+						{
+							type: "IMAGE",
+							scaleMode: "FIT",
+							imageHash: image.hash,
+						},
+					];
+				} else {
+					console.error(`Unsupported image type: ${imageType}`);
+				}
+			} else {
+				console.error(`Image file not found for path: ${imagePath}`);
+			}
 		}
 	}
+
+	section.resizeWithoutConstraints(2120, slides.length * 1140 + 60);
 }
