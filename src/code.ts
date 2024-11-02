@@ -33,6 +33,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 				return;
 			}
 
+			await getSlideGrids();
 			const slides = await parseSlides(zip);
 			await renderSlidesToFrames(slides, zip, name);
 		} catch (generalError) {
@@ -83,11 +84,11 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 
 			const slideContent = await slideFile.async("text");
 			const slideData = await parseStringPromise(slideContent);
-			console.log(`Parsed slide: ${path}`);
+			// console.log(`Parsed slide: ${path}`);
 
 			const relsContent = await relsFile.async("text");
 			const relsData = await parseStringPromise(relsContent);
-			console.log(`Parsed rels: ${relsPath}`);
+			// console.log(`Parsed rels: ${relsPath}`);
 
 			let title = "";
 			const paragraphs: string[] = [];
@@ -126,7 +127,7 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 
 					if (imagePath) {
 						images.push(`${imagePath}`);
-						console.log(`Image extracted for slide: ${path}`);
+						// console.log(`Image extracted for slide: ${path}`);
 					} else {
 						console.warn(
 							`Image file not found for path: ${imagePath}`
@@ -150,20 +151,23 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 	return slides;
 }
 
-// const nullPaint = figma.createPaintStyle();
+let slideGrids: GridStyle[] = [];
+async function getSlideGrids() {
+	try {
+		slideGrids = await figma.getLocalGridStylesAsync();
+	} catch (error) {
+		console.error("Error fetching slide grids:", error);
+	}
+}
 
 async function renderSlidesToFrames(
 	slides: SlideData[],
 	zip: JSZip,
 	name: string
 ) {
-	// let yPosition = 0;
-	// let xPosition = 0;
-
 	const section = figma.createSection();
 	figma.currentPage.appendChild(section);
 	section.name = name?.match(/[0-9]/g)?.join("") ?? "Slides";
-	console.log(`Created section: ${zip.name}`);
 	section.resizeWithoutConstraints(2120, 1080);
 	// section.setFillStyleIdAsync(nullPaint.id);
 
@@ -178,6 +182,7 @@ async function renderSlidesToFrames(
 		const frame = figma.createFrame();
 		parentFrame.appendChild(frame);
 		frame.name = `${index + 1}`;
+		frame.setGridStyleIdAsync(slideGrids[0].id);
 		frame.resize(1920, 1080);
 		frame.layoutMode = "VERTICAL";
 		frame.layoutSizingHorizontal = "FIXED";
@@ -278,7 +283,7 @@ async function renderSlidesToFrames(
 						},
 					];
 				} else {
-					console.error(`Unsupported image type: ${imageType}`);
+					// console.error(`Unsupported image type: ${imageType}`);
 				}
 			} else {
 				console.error(`Image file not found for path: ${imagePath}`);
