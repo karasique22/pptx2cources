@@ -171,7 +171,7 @@ async function renderSlidesToFrames(slides: SlideData[], zip: JSZip) {
 	for (const [index, slide] of slides.entries()) {
 		const frame = figma.createFrame();
 		parentFrame.appendChild(frame);
-		frame.name = `${index + 2}`;
+		frame.name = `${index + 1}`;
 		frame.resize(1920, 1080);
 		frame.layoutMode = "VERTICAL";
 		frame.layoutSizingHorizontal = "FIXED";
