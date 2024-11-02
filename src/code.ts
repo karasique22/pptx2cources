@@ -14,6 +14,11 @@ interface PluginMessage {
 	posX: number;
 }
 
+interface ParagraphData {
+	text: string;
+	isList: boolean;
+}
+
 figma.showUI(__html__);
 
 figma.ui.onmessage = async (msg: PluginMessage) => {
@@ -86,14 +91,12 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 
 			const slideContent = await slideFile.async("text");
 			const slideData = await parseStringPromise(slideContent);
-			// console.log(`Parsed slide: ${path}`);
 
 			const relsContent = await relsFile.async("text");
 			const relsData = await parseStringPromise(relsContent);
-			// console.log(`Parsed rels: ${relsPath}`);
 
 			let title = "";
-			const paragraphs: string[] = [];
+			const paragraphs: ParagraphData[] = [];
 			const images: string[] = [];
 
 			const shapes =
@@ -106,10 +109,19 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 					const paragraphsInShape = textBody[0]?.["a:p"];
 					if (paragraphsInShape) {
 						for (const paragraph of paragraphsInShape) {
-							const text =
-								paragraph?.["a:r"]?.[0]?.["a:t"]?.[0] || "";
+							const text = (paragraph?.["a:r"] || [])
+								.map((r: any) => r["a:t"]?.[0] || "")
+								.join("")
+								.trim();
+
+							if (!text) continue; // Пропускаем пустые параграфы
+
+							const paragraphProps = paragraph?.["a:pPr"]?.[0];
+							const isList =
+								!paragraphProps || !paragraphProps["a:buNone"];
+
 							if (!title && text) title = text;
-							else paragraphs.push(text);
+							else paragraphs.push({ text, isList });
 						}
 					}
 				}
@@ -129,7 +141,6 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 
 					if (imagePath) {
 						images.push(`${imagePath}`);
-						// console.log(`Image extracted for slide: ${path}`);
 					} else {
 						console.warn(
 							`Image file not found for path: ${imagePath}`
@@ -138,9 +149,14 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 				}
 			}
 
+			// Формируем текст с маркером для списка
+			const text = paragraphs
+				.map(p => (p.isList ? `• ${p.text}` : p.text))
+				.join("\n");
+
 			slides.push({
 				title,
-				text: paragraphs.join(" "),
+				text,
 				images,
 			});
 		} catch (slideError) {
@@ -234,6 +250,7 @@ async function renderSlidesToFrames(
 		await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
 		bodyText.fontName = { family: "Roboto", style: "Regular" };
 		bodyText.characters = slide.text;
+		bodyText.paragraphSpacing = 30;
 		bodyText.fontSize = 36;
 		bodyText.fills = [
 			{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
@@ -278,6 +295,7 @@ async function renderSlidesToFrames(
 					imageNode.cornerRadius = 30;
 					imageNode.layoutSizingHorizontal = "FILL";
 					imageNode.layoutSizingVertical = "FILL";
+					imageNode.cornerRadius = 30;
 
 					imageNode.fills = [
 						{
@@ -296,4 +314,8 @@ async function renderSlidesToFrames(
 	}
 
 	section.resizeWithoutConstraints(2120, slides.length * 1140 + 140);
+	parentFrame.relativeTransform = [
+		[1, 0, 100],
+		[0, 1, 100],
+	];
 }
