@@ -1,11 +1,26 @@
-<h2>pptx2curces)</h2>
-<input type="file" id="load" accept=".pptx" />
+<style>
+	body {
+		font-family: sans-serif;
+	}
+
+	#submit {
+		margin: 10px auto;
+		background-color: pink;
+		border: 1px solid black;
+		border-radius: 4px;
+	}
+</style>
+
+<h2 style="text-align: center">pptx2curces)</h2>
+<input id="load" type="file" accept=".pptx" />
+<button id="submit" type="submit">АНУС</button>
 
 <script>
-	const loadButton = document.querySelector("#load");
+	const submitButton = document.querySelector("#submit");
+	const load = document.querySelector("#load");
 
-	loadButton.addEventListener("change", e => {
-		const file = loadButton.files[0];
+	submitButton.addEventListener("click", e => {
+		const file = load.files[0];
 		const reader = new FileReader();
 
 		// Read file as ArrayBuffer to preserve binary integrity
