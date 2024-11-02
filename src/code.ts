@@ -11,6 +11,7 @@ interface PluginMessage {
 	type: string;
 	data: ArrayBuffer;
 	name: string;
+	posX: number;
 }
 
 figma.showUI(__html__);
@@ -23,9 +24,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 				return;
 			}
 
-			let zip, name;
+			let zip, name, posX;
 			try {
 				name = msg.name;
+				posX = msg.posX;
 				zip = await JSZip.loadAsync(msg.data);
 				console.log("Zip file successfully loaded.");
 			} catch (err) {
@@ -35,7 +37,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
 			await getSlideGrids();
 			const slides = await parseSlides(zip);
-			await renderSlidesToFrames(slides, zip, name);
+			await renderSlidesToFrames(slides, zip, name, posX);
 		} catch (generalError) {
 			console.error(
 				"An error occurred in the file processing:",
@@ -163,12 +165,14 @@ async function getSlideGrids() {
 async function renderSlidesToFrames(
 	slides: SlideData[],
 	zip: JSZip,
-	name: string
+	name: string,
+	posX: number
 ) {
 	const section = figma.createSection();
 	figma.currentPage.appendChild(section);
 	section.name = name?.match(/[0-9]/g)?.join("") ?? "Slides";
 	section.resizeWithoutConstraints(2120, 1080);
+	section.x = posX;
 	// section.setFillStyleIdAsync(nullPaint.id);
 
 	const parentFrame = figma.createFrame();
@@ -291,5 +295,5 @@ async function renderSlidesToFrames(
 		}
 	}
 
-	section.resizeWithoutConstraints(2120, slides.length * 1140 + 60);
+	section.resizeWithoutConstraints(2120, slides.length * 1140 + 140);
 }

@@ -12,33 +12,37 @@
 </style>
 
 <h2 style="text-align: center">pptx2curces)</h2>
-<input id="load" type="file" accept=".pptx" />
-<button id="submit" type="submit">АНУС</button>
+<input id="load" type="file" accept=".pptx" multiple />
+<button id="submit" type="submit">Запустить торпеду</button>
 
 <script>
 	const submitButton = document.querySelector("#submit");
 	const load = document.querySelector("#load");
 
 	submitButton.addEventListener("click", e => {
-		const file = load.files[0];
-		const reader = new FileReader();
+		const files = load.files;
+		let x = 0;
 
-		// Read file as ArrayBuffer to preserve binary integrity
-		reader.onload = () => {
-			const content = reader.result;
+		for (const file of files) {
+			const reader = new FileReader();
 
-			// Send ArrayBuffer content directly to plugin without modification
-			parent.postMessage(
-				{
-					pluginMessage: {
-						type: "file",
-						data: content,
-						name: file.name,
+			reader.onload = () => {
+				const content = reader.result;
+
+				parent.postMessage(
+					{
+						pluginMessage: {
+							type: "file",
+							data: content,
+							name: file.name,
+							posX: x,
+						},
 					},
-				},
-				"*"
-			);
-		};
-		reader.readAsArrayBuffer(file); // Ensure ArrayBuffer is used
+					"*"
+				);
+				x += 2160;
+			};
+			reader.readAsArrayBuffer(file);
+		}
 	});
 </script>
