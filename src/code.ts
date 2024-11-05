@@ -151,7 +151,11 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 
 			// Формируем текст с маркером для списка
 			const text = paragraphs
-				.map(p => (p.isList ? `• ${p.text}` : p.text))
+				.map(p =>
+					p.isList
+						? `• ${p.text[0].toUpperCase() + p.text.slice(1)}`
+						: p.text
+				)
 				.join("\n");
 
 			slides.push({
@@ -234,8 +238,9 @@ async function renderSlidesToFrames(
 			value: 140,
 			unit: "PERCENT",
 		};
+		titleText.resizeWithoutConstraints(1920, 1080);
 		titleText.layoutSizingHorizontal = "FILL";
-		titleText.layoutSizingHorizontal = "HUG";
+		titleText.layoutSizingVertical = "HUG";
 
 		const bodyFrame = figma.createFrame();
 		frame.appendChild(bodyFrame);
@@ -295,7 +300,6 @@ async function renderSlidesToFrames(
 					imageNode.cornerRadius = 30;
 					imageNode.layoutSizingHorizontal = "FILL";
 					imageNode.layoutSizingVertical = "FILL";
-					imageNode.cornerRadius = 30;
 
 					imageNode.fills = [
 						{
