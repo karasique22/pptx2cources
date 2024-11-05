@@ -3,7 +3,7 @@ import { parseStringPromise } from "xml2js";
 
 interface SlideData {
 	title: string;
-	text: string;
+	text: string[];
 	images: string[];
 }
 
@@ -150,13 +150,14 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 			}
 
 			// Формируем текст с маркером для списка
-			const text = paragraphs
-				.map(p =>
-					p.isList
-						? `• ${p.text[0].toUpperCase() + p.text.slice(1)}`
-						: p.text
-				)
-				.join("\n");
+			const text: string[] = [];
+			for (const p of paragraphs) {
+				if (p.isList) {
+					text.push(`• ${p.text[0].toUpperCase() + p.text.slice(1)}`);
+				} else {
+					text.push(p.text);
+				}
+			}
 
 			slides.push({
 				title,
@@ -249,13 +250,46 @@ async function renderSlidesToFrames(
 		bodyFrame.layoutSizingVertical = "FILL";
 		bodyFrame.itemSpacing = 25;
 
-		// Render body text
 		const bodyText = figma.createText();
 		bodyFrame.appendChild(bodyText);
 		await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
 		bodyText.fontName = { family: "Roboto", style: "Regular" };
-		bodyText.characters = slide.text;
-		bodyText.paragraphSpacing = 30;
+
+		for (const p of slide.text) {
+			if (p.startsWith("•") || p.match(/^\d+\. /)) {
+				// Если это список, форматируем его как список
+				if (p.startsWith("•")) {
+					const paragraph = p.substring(2); // Remove the bullet point
+					bodyText.characters += `${paragraph}\n`;
+					bodyText.setRangeListOptions(
+						bodyText.characters.length - paragraph.length - 1,
+						bodyText.characters.length - 1,
+						{ type: "UNORDERED" }
+					);
+				} else {
+					const match = p.match(/^\d+\. /);
+					if (match) {
+						const paragraph = p.substring(match[0].length); // Remove the number and period and space
+						bodyText.characters += `${paragraph}\n`;
+						bodyText.setRangeListOptions(
+							bodyText.characters.length - paragraph.length - 1,
+							bodyText.characters.length - 1,
+							{ type: "ORDERED" }
+						);
+					}
+				}
+			} else {
+				// Если это не список, просто добавляем его к тексту
+				bodyText.characters += `${p}\n`;
+				bodyText.setRangeListOptions(
+					bodyText.characters.length - p.length - 1,
+					bodyText.characters.length - 1,
+					{ type: "NONE" }
+				);
+			}
+		}
+
+		bodyText.characters = bodyText.characters.slice(0, -1);
 		bodyText.fontSize = 36;
 		bodyText.fills = [
 			{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
