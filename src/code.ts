@@ -1,9 +1,14 @@
 import JSZip from "jszip";
 import { parseStringPromise } from "xml2js";
 
+interface textItem {
+	text: string;
+	isList: boolean;
+	textDecoration: string;
+}
 interface SlideData {
 	title: string;
-	text: string[];
+	text: textItem[];
 	images: string[];
 }
 
@@ -12,11 +17,6 @@ interface PluginMessage {
 	data: ArrayBuffer;
 	name: string;
 	posX: number;
-}
-
-interface ParagraphData {
-	text: string;
-	isList: boolean;
 }
 
 figma.showUI(__html__);
@@ -96,7 +96,7 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 			const relsData = await parseStringPromise(relsContent);
 
 			let title = "";
-			const paragraphs: ParagraphData[] = [];
+			const paragraphs: textItem[] = [];
 			const images: string[] = [];
 
 			const shapes =
@@ -114,14 +114,21 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 								.join("")
 								.trim();
 
-							if (!text) continue; // Пропускаем пустые параграфы
+							if (!text) continue;
 
 							const paragraphProps = paragraph?.["a:pPr"]?.[0];
+							const textDecoration = paragraphProps?.$?.u;
+
 							const isList =
 								!paragraphProps || !paragraphProps["a:buNone"];
 
 							if (!title && text) title = text;
-							else paragraphs.push({ text, isList });
+							else
+								paragraphs.push({
+									text,
+									isList,
+									textDecoration,
+								});
 						}
 					}
 				}
@@ -150,18 +157,18 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 			}
 
 			// Формируем текст с маркером для списка
-			const text: string[] = [];
+			const textItems: textItem[] = [];
 			for (const p of paragraphs) {
-				if (p.isList) {
-					text.push(`• ${p.text[0].toUpperCase() + p.text.slice(1)}`);
-				} else {
-					text.push(p.text);
-				}
+				textItems.push({
+					text: `${p.text[0].toUpperCase() + p.text.slice(1)}`,
+					isList: p.isList,
+					textDecoration: p.textDecoration,
+				});
 			}
 
 			slides.push({
 				title,
-				text,
+				text: textItems,
 				images,
 			});
 		} catch (slideError) {
@@ -256,33 +263,16 @@ async function renderSlidesToFrames(
 		bodyText.fontName = { family: "Roboto", style: "Regular" };
 
 		for (const p of slide.text) {
-			if (p.startsWith("•") || p.match(/^\d+\. /)) {
-				// Если это список, форматируем его как список
-				if (p.startsWith("•")) {
-					const paragraph = p.substring(2); // Remove the bullet point
-					bodyText.characters += `${paragraph}\n`;
-					bodyText.setRangeListOptions(
-						bodyText.characters.length - paragraph.length - 1,
-						bodyText.characters.length - 1,
-						{ type: "UNORDERED" }
-					);
-				} else {
-					const match = p.match(/^\d+\. /);
-					if (match) {
-						const paragraph = p.substring(match[0].length); // Remove the number and period and space
-						bodyText.characters += `${paragraph}\n`;
-						bodyText.setRangeListOptions(
-							bodyText.characters.length - paragraph.length - 1,
-							bodyText.characters.length - 1,
-							{ type: "ORDERED" }
-						);
-					}
-				}
-			} else {
-				// Если это не список, просто добавляем его к тексту
-				bodyText.characters += `${p}\n`;
+			bodyText.characters += `${p.text}\n`;
+			if (p.isList) {
 				bodyText.setRangeListOptions(
-					bodyText.characters.length - p.length - 1,
+					bodyText.characters.length - p.text.length - 1,
+					bodyText.characters.length - 1,
+					{ type: "UNORDERED" }
+				);
+			} else {
+				bodyText.setRangeListOptions(
+					bodyText.characters.length - p.text.length - 1,
 					bodyText.characters.length - 1,
 					{ type: "NONE" }
 				);
