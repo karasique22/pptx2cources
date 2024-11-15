@@ -156,7 +156,6 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 				}
 			}
 
-			// Формируем текст с маркером для списка
 			const textItems: textItem[] = [];
 			for (const p of paragraphs) {
 				textItems.push({
@@ -201,7 +200,6 @@ async function renderSlidesToFrames(
 	section.name = name?.match(/[0-9]/g)?.join("") ?? "Slides";
 	section.resizeWithoutConstraints(2120, 1080);
 	section.x = posX;
-	// section.setFillStyleIdAsync(nullPaint.id);
 
 	const parentFrame = figma.createFrame();
 	section.appendChild(parentFrame);
@@ -257,40 +255,35 @@ async function renderSlidesToFrames(
 		bodyFrame.layoutSizingVertical = "FILL";
 		bodyFrame.itemSpacing = 25;
 
-		const bodyText = figma.createText();
-		bodyFrame.appendChild(bodyText);
 		await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
-		bodyText.fontName = { family: "Roboto", style: "Regular" };
 
 		for (const p of slide.text) {
-			bodyText.characters += `${p.text}\n`;
+			const textFrame = figma.createText();
+			textFrame.fontName = { family: "Roboto", style: "Regular" };
+
+			textFrame.characters += `${p.text}`;
 			if (p.isList) {
-				bodyText.setRangeListOptions(
-					bodyText.characters.length - p.text.length - 1,
-					bodyText.characters.length - 1,
-					{ type: "UNORDERED" }
-				);
+				textFrame.setRangeListOptions(0, textFrame.characters.length, {
+					type: "UNORDERED",
+				});
 			} else {
-				bodyText.setRangeListOptions(
-					bodyText.characters.length - p.text.length - 1,
-					bodyText.characters.length - 1,
-					{ type: "NONE" }
-				);
+				textFrame.setRangeListOptions(0, textFrame.characters.length, {
+					type: "NONE",
+				});
 			}
+			textFrame.fontSize = 36;
+			textFrame.fills = [
+				{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
+			];
+			textFrame.lineHeight = {
+				value: 120,
+				unit: "PERCENT",
+			};
+			bodyFrame.appendChild(textFrame);
 		}
 
-		bodyText.characters = bodyText.characters.slice(0, -1);
-		bodyText.fontSize = 36;
-		bodyText.fills = [
-			{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
-		];
-		bodyText.lineHeight = {
-			value: 120,
-			unit: "PERCENT",
-		};
-		bodyText.resize(1920, 1080);
-		bodyText.layoutSizingHorizontal = "FILL";
-		bodyText.layoutSizingVertical = "HUG";
+		bodyFrame.layoutSizingHorizontal = "FILL";
+		bodyFrame.layoutSizingVertical = "FILL";
 
 		let picFrame;
 		if (slide.images.length > 1) {
@@ -306,11 +299,8 @@ async function renderSlidesToFrames(
 			if (imageFile) {
 				const imageData = await imageFile.async("uint8array");
 
-				// Логирование типа изображения
 				const imageType = imagePath.split(".").pop();
-				// console.log(`Loading image: ${imagePath}, Type: ${imageType}`);
 
-				// Проверка поддерживаемых форматов
 				if (
 					imageType === "png" ||
 					imageType === "jpeg" ||
