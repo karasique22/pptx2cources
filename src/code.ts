@@ -5,6 +5,7 @@ interface textItem {
 	text: string;
 	isList: boolean;
 	textDecoration: string;
+	lvl: number;
 }
 interface SlideData {
 	title: string;
@@ -119,15 +120,19 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 							const paragraphProps = paragraph?.["a:pPr"]?.[0];
 							const textDecoration = paragraphProps?.$?.u;
 
+							const lvl = parseInt(
+								paragraph?.["a:pPr"]?.[0]?.$.lvl || "0"
+							);
+
 							const isList =
 								!paragraphProps || !paragraphProps["a:buNone"];
-
 							if (!title && text) title = text;
 							else
 								paragraphs.push({
 									text,
 									isList,
 									textDecoration,
+									lvl,
 								});
 						}
 					}
@@ -162,6 +167,7 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
 					text: `${p.text[0].toUpperCase() + p.text.slice(1)}`,
 					isList: p.isList,
 					textDecoration: p.textDecoration,
+					lvl: p.lvl,
 				});
 			}
 
@@ -271,6 +277,7 @@ async function renderSlidesToFrames(
 					type: "NONE",
 				});
 			}
+
 			textFrame.fontSize = 36;
 			textFrame.fills = [
 				{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
@@ -279,7 +286,13 @@ async function renderSlidesToFrames(
 				value: 120,
 				unit: "PERCENT",
 			};
+
+			// if (p.lvl !== 0) {
+			// }
+
 			bodyFrame.appendChild(textFrame);
+			textFrame.layoutSizingHorizontal = "FILL";
+			textFrame.layoutSizingVertical = "HUG";
 		}
 
 		bodyFrame.layoutSizingHorizontal = "FILL";
