@@ -300,6 +300,7 @@ async function renderSlidesToFrames(
 
 		bodyFrame.layoutSizingHorizontal = "FILL";
 		bodyFrame.layoutSizingVertical = "FILL";
+		bodyFrame.counterAxisAlignItems = "CENTER";
 
 		let picFrame;
 		if (slide.images.length > 1) {
