@@ -263,22 +263,25 @@ async function renderSlidesToFrames(
 
 		await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
 
-		for (const p of slide.text) {
+		const mergedTextArray = slide.text.reduce<textItem[]>((acc, p) => {
+			const lastItem = acc[acc.length - 1];
+			if (lastItem && lastItem.isList === p.isList) {
+				lastItem.text += `\n${p.text}`;
+			} else {
+				acc.push({ ...p });
+			}
+			return acc;
+		}, []);
+
+		for (const p of mergedTextArray) {
 			const textFrame = figma.createText();
 			textFrame.fontName = { family: "Roboto", style: "Regular" };
-
-			textFrame.characters += `${p.text}`;
-			if (p.isList) {
-				textFrame.setRangeListOptions(0, textFrame.characters.length, {
-					type: "UNORDERED",
-				});
-			} else {
-				textFrame.setRangeListOptions(0, textFrame.characters.length, {
-					type: "NONE",
-				});
-			}
-
+			textFrame.characters = p.text;
+			textFrame.setRangeListOptions(0, textFrame.characters.length, {
+				type: p.isList ? "UNORDERED" : "NONE",
+			});
 			textFrame.fontSize = 36;
+			textFrame.listSpacing = 25;
 			textFrame.fills = [
 				{ type: "SOLID", color: { r: 0.439, g: 0.494, b: 0.682 } },
 			];
