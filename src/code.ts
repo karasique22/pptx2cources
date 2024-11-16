@@ -303,7 +303,7 @@ async function renderSlidesToFrames(
 			picFrame = figma.createFrame();
 			bodyFrame.appendChild(picFrame);
 			picFrame.layoutMode = "HORIZONTAL";
-			picFrame.layoutSizingHorizontal = "FILL";
+			picFrame.layoutSizingHorizontal = "FIXED";
 			picFrame.layoutSizingVertical = "FILL";
 			picFrame.itemSpacing = 30;
 		}
@@ -320,13 +320,21 @@ async function renderSlidesToFrames(
 					imageType === "jpg"
 				) {
 					const image = figma.createImage(imageData);
+					const { width, height } = await image.getSizeAsync();
+					const ratio = width / height;
+
 					const imageNode = figma.createRectangle();
+					imageNode.cornerRadius = 30;
+
 					picFrame
 						? picFrame.appendChild(imageNode)
 						: bodyFrame.appendChild(imageNode);
-					imageNode.cornerRadius = 30;
-					imageNode.layoutSizingHorizontal = "FILL";
+
 					imageNode.layoutSizingVertical = "FILL";
+					imageNode.resize(
+						imageNode.height * ratio,
+						imageNode.height
+					);
 
 					imageNode.fills = [
 						{
