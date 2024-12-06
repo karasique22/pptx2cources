@@ -1,15 +1,19 @@
 import JSZip from 'jszip';
 import { parseStringPromise } from 'xml2js';
 
+interface ParagraphItem {
+  text: TextItem[];
+  isList: boolean;
+}
+
 interface TextItem {
   text: string;
-  isList: boolean;
   isBold: boolean;
 }
 
 interface SlideData {
   title: string;
-  text: TextItem[];
+  text: ParagraphItem[];
   images: string[];
 }
 
@@ -39,6 +43,7 @@ async function handleFileMessage(msg: PluginMessage) {
     await getSlideGrids();
     const slides = await parseSlides(zip);
     await renderSlidesToFrames(slides, zip, name, posX);
+    console.log(slides);
   } catch (error) {
     console.error('An error occurred in the file processing:', error);
   }
@@ -115,11 +120,12 @@ async function processSlide(
     const relsData = await parseStringPromise(relsContent);
 
     const { title, paragraphs } = extractTextData(slideData);
+
     const images = extractImagePaths(relsData);
 
     return {
       title,
-      text: formatTextItems(paragraphs),
+      text: formatParagraphItems(paragraphs),
       images,
     };
   } catch (error) {
@@ -130,39 +136,47 @@ async function processSlide(
 
 function extractTextData(slideData: any): {
   title: string;
-  paragraphs: TextItem[];
+  paragraphs: ParagraphItem[];
 } {
   let title = '';
-  const paragraphs: TextItem[] = [];
+  const paragraphs: ParagraphItem[] = [];
 
   const shapes =
     slideData?.['p:sld']?.['p:cSld']?.[0]?.['p:spTree']?.[0]?.['p:sp'] || [];
+  title =
+    shapes.find(
+      (shape: any) =>
+        shape?.['p:nvSpPr']?.[0]?.['p:nvPr']?.[0]?.[
+          'p:ph'
+        ]?.[0]?.$?.type.includes('title') ||
+        shape?.['p:nvSpPr']?.[0]?.['p:nvPr']?.[0]?.[
+          'p:ph'
+        ]?.[0]?.$?.type.includes('ctrTitle')
+    )?.['p:txBody']?.[0]?.['a:p']?.[0]?.['a:r']?.[0]?.['a:t']?.[0] || '';
   for (const shape of shapes) {
     const textBody = shape?.['p:txBody'];
     if (textBody) {
       const paragraphsInShape = textBody[0]?.['a:p'];
       if (paragraphsInShape) {
         for (const paragraph of paragraphsInShape) {
-          const text = (paragraph?.['a:r'] || [])
-            .map((r: any) => r['a:t']?.[0] || '')
-            .join('')
-            .trim();
+          const textArray: TextItem[] = [];
 
-          const style = paragraph?.['a:r']?.[0]?.['a:rPr']?.[0];
-          const isBold = style?.$?.b === '1';
+          for (const textItem of paragraph?.['a:r'] || []) {
+            const text = textItem['a:t']?.[0];
+            if (text !== title) {
+              textArray.push({
+                text,
+                isBold: textItem['a:rPr']?.[0]?.$?.b === '1',
+              });
+            }
+          }
 
-          if (!text) continue;
+          if (!textArray.length) continue;
 
           const paragraphProps = paragraph?.['a:pPr']?.[0];
           const isList = !paragraphProps || !paragraphProps['a:buNone'];
 
-          if (!title && text) title = text;
-          else
-            paragraphs.push({
-              text,
-              isList,
-              isBold,
-            });
+          paragraphs.push({ text: textArray, isList });
         }
       }
     }
@@ -190,11 +204,13 @@ function extractImagePaths(relsData: any): string[] {
   return images;
 }
 
-function formatTextItems(paragraphs: TextItem[]): TextItem[] {
+function formatParagraphItems(paragraphs: ParagraphItem[]): ParagraphItem[] {
   return paragraphs.map((p) => ({
-    text: `${p.text[0].toUpperCase() + p.text.slice(1)}`,
+    text: p.text.map((t, index) => ({
+      text: index === 0 ? t.text[0].toUpperCase() + t.text.slice(1) : t.text,
+      isBold: t.isBold,
+    })),
     isList: p.isList,
-    isBold: p.isBold,
   }));
 }
 
@@ -304,19 +320,35 @@ function createBodyFrame(frame: FrameNode) {
   return bodyFrame;
 }
 
-async function createTextFrames(bodyFrame: FrameNode, textItems: TextItem[]) {
+async function createTextFrames(
+  bodyFrame: FrameNode,
+  ParagraphItems: ParagraphItem[]
+) {
   await figma.loadFontAsync({ family: 'Roboto', style: 'Regular' });
   await figma.loadFontAsync({ family: 'Roboto', style: 'Bold' });
 
-  const mergedTextArray = mergeTextItems(textItems);
-
-  for (const p of mergedTextArray) {
+  for (const p of ParagraphItems) {
     const textFrame = figma.createText();
+    textFrame.fontName = { family: 'Roboto', style: 'Regular' };
+    textFrame.characters = p.text.map((t) => t.text).join('');
 
-    textFrame.fontName = p.isBold
-      ? { family: 'Roboto', style: 'Bold' }
-      : { family: 'Roboto', style: 'Regular' };
-    textFrame.characters = p.text;
+    let currentIndex = 0;
+    for (const t of p.text) {
+      const length = t.text.length;
+      if (t.isBold) {
+        textFrame.setRangeFontName(currentIndex, currentIndex + length, {
+          family: 'Roboto',
+          style: 'Bold',
+        });
+      }
+      console.log(
+        textFrame.getRangeFontName(currentIndex, currentIndex + length),
+        textFrame.characters.slice(currentIndex, currentIndex + length)
+      );
+
+      currentIndex += length;
+    }
+
     textFrame.setRangeListOptions(0, textFrame.characters.length, {
       type: p.isList ? 'UNORDERED' : 'NONE',
     });
@@ -338,18 +370,6 @@ async function createTextFrames(bodyFrame: FrameNode, textItems: TextItem[]) {
   bodyFrame.layoutSizingHorizontal = 'FILL';
   bodyFrame.layoutSizingVertical = 'FILL';
   bodyFrame.counterAxisAlignItems = 'CENTER';
-}
-
-function mergeTextItems(textItems: TextItem[]): TextItem[] {
-  return textItems.reduce<TextItem[]>((acc, p) => {
-    const lastItem = acc[acc.length - 1];
-    if (lastItem && lastItem.isList === p.isList) {
-      lastItem.text += `\n${p.text}`;
-    } else {
-      acc.push({ ...p });
-    }
-    return acc;
-  }, []);
 }
 
 async function createImageFrames(
