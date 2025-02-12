@@ -186,17 +186,18 @@ function extractTextData(slideData: any): {
 
 function extractImagePaths(relsData: any): string[] {
   const images: string[] = [];
+  const uniqueImages = new Set<string>();
   const relationships = relsData?.['Relationships']?.['Relationship'] || [];
+
   for (const relationship of relationships) {
     if (
       relationship.$.Type ===
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
     ) {
       const imagePath = `ppt/${relationship.$.Target.replace('../', '')}`;
-      if (imagePath) {
-        images.push(`${imagePath}`);
-      } else {
-        console.warn(`Image file not found for path: ${imagePath}`);
+      if (imagePath && !uniqueImages.has(imagePath)) {
+        uniqueImages.add(imagePath);
+        images.push(imagePath);
       }
     }
   }
