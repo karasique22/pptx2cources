@@ -15,6 +15,7 @@ interface SlideData {
   title: string;
   text: ParagraphItem[];
   images: string[];
+  number: number;
 }
 
 interface PluginMessage {
@@ -43,7 +44,6 @@ async function handleFileMessage(msg: PluginMessage) {
     await getSlideGrids();
     const slides = await parseSlides(zip);
     await renderSlidesToFrames(slides, zip, name, posX);
-    console.log(slides);
   } catch (error) {
     console.error('An error occurred in the file processing:', error);
   }
@@ -52,7 +52,6 @@ async function handleFileMessage(msg: PluginMessage) {
 async function loadZipFile(msg: PluginMessage) {
   try {
     const zip = await JSZip.loadAsync(msg.data);
-    console.log('Zip file successfully loaded.');
     return { zip, name: msg.name, posX: msg.posX };
   } catch (err) {
     console.error('Error loading zip file:', err);
@@ -74,7 +73,6 @@ async function parseSlides(zip: JSZip): Promise<SlideData[]> {
     const slideData = await processSlide(zip, path, slideToRelsMap[path]);
     if (slideData) slides.push(slideData);
   }
-  console.log(slides);
   return slides;
 }
 
@@ -127,6 +125,7 @@ async function processSlide(
       title,
       text: formatParagraphItems(paragraphs),
       images,
+      number: 0,
     };
   } catch (error) {
     console.error(`Error processing slide ${path}:`, error);
@@ -231,12 +230,14 @@ async function renderSlidesToFrames(
 ) {
   const section = createSection(name, posX);
   const parentFrame = createParentFrame(section);
+  parentFrame.fills = [];
 
   for (const [index, slide] of slides.entries()) {
-    const frame = await createSlideFrame(parentFrame, index);
-    await createTitleFrame(frame, slide.title);
-    const bodyFrame = createBodyFrame(frame);
-    await createTextFrames(bodyFrame, slide.text);
+    slide.number = index + 1;
+    const frame = await createSlideFrame(parentFrame, slide.number);
+    await createTitleFrame(frame, slide.title, slide.number);
+    const bodyFrame = createBodyFrame(frame, slide.number);
+    await createTextFrames(bodyFrame, slide.text, slide.number);
     await createImageFrames(bodyFrame, slide.images, zip);
   }
 
@@ -266,10 +267,10 @@ function createParentFrame(section: SectionNode) {
   return parentFrame;
 }
 
-async function createSlideFrame(parentFrame: FrameNode, index: number) {
+async function createSlideFrame(parentFrame: FrameNode, number: number) {
   const frame = figma.createFrame();
   parentFrame.appendChild(frame);
-  frame.name = `${index + 1}`;
+  frame.name = `${number}`;
   await frame.setGridStyleIdAsync(slideGrids[0].id);
   frame.resize(1920, 1080);
   frame.layoutMode = 'VERTICAL';
@@ -278,10 +279,19 @@ async function createSlideFrame(parentFrame: FrameNode, index: number) {
   frame.verticalPadding = 80;
   frame.horizontalPadding = 80;
   frame.itemSpacing = 30;
+
+  if (number === 1) {
+    frame.primaryAxisAlignItems = 'CENTER';
+  }
+
   return frame;
 }
 
-async function createTitleFrame(frame: FrameNode, title: string) {
+async function createTitleFrame(
+  frame: FrameNode,
+  title: string,
+  number: number
+) {
   const titleFrame = figma.createFrame();
   frame.appendChild(titleFrame);
   titleFrame.layoutMode = 'VERTICAL';
@@ -292,15 +302,31 @@ async function createTitleFrame(frame: FrameNode, title: string) {
   const titleText = figma.createText();
   titleFrame.appendChild(titleText);
   await figma.loadFontAsync({ family: 'Roboto', style: 'ExtraBold' });
-  titleText.fontName = { family: 'Roboto', style: 'ExtraBold' };
+  await figma.loadFontAsync({ family: 'Roboto', style: 'Bold' });
+  if (number === 1) {
+    titleText.fontName = { family: 'Roboto', style: 'Bold' };
+  } else {
+    titleText.fontName = { family: 'Roboto', style: 'ExtraBold' };
+  }
   titleText.characters = title;
-  titleText.fontSize = 48;
-  titleText.fills = [
-    {
-      type: 'SOLID',
-      color: { r: 0.176, g: 0.212, b: 0.455 },
-    },
-  ];
+  if (number === 1) {
+    titleText.fontSize = 64;
+    titleText.fills = [
+      {
+        type: 'SOLID',
+        color: { r: 0.168, g: 0.212, b: 0.454 },
+      },
+    ];
+  } else {
+    titleText.fontSize = 48;
+    titleText.fills = [
+      {
+        type: 'SOLID',
+        color: { r: 0.176, g: 0.212, b: 0.455 },
+      },
+    ];
+  }
+
   titleText.lineHeight = {
     value: 140,
     unit: 'PERCENT',
@@ -310,19 +336,25 @@ async function createTitleFrame(frame: FrameNode, title: string) {
   titleText.layoutSizingVertical = 'HUG';
 }
 
-function createBodyFrame(frame: FrameNode) {
+function createBodyFrame(frame: FrameNode, number: number) {
   const bodyFrame = figma.createFrame();
   frame.appendChild(bodyFrame);
   bodyFrame.layoutMode = 'VERTICAL';
+  if (number === 1) {
+    bodyFrame.layoutSizingVertical = 'HUG';
+  } else {
+    bodyFrame.layoutSizingVertical = 'FILL';
+  }
   bodyFrame.layoutSizingHorizontal = 'FILL';
-  bodyFrame.layoutSizingVertical = 'FILL';
+  bodyFrame.counterAxisAlignItems = 'CENTER';
   bodyFrame.itemSpacing = 25;
   return bodyFrame;
 }
 
 async function createTextFrames(
   bodyFrame: FrameNode,
-  ParagraphItems: ParagraphItem[]
+  ParagraphItems: ParagraphItem[],
+  number: number
 ) {
   await figma.loadFontAsync({ family: 'Roboto', style: 'Regular' });
   await figma.loadFontAsync({ family: 'Roboto', style: 'Bold' });
@@ -335,41 +367,40 @@ async function createTextFrames(
     let currentIndex = 0;
     for (const t of p.text) {
       const length = t.text.length;
-      if (t.isBold) {
+      if (t.isBold || number === 1) {
         textFrame.setRangeFontName(currentIndex, currentIndex + length, {
           family: 'Roboto',
           style: 'Bold',
         });
       }
-      console.log(
-        textFrame.getRangeFontName(currentIndex, currentIndex + length),
-        textFrame.characters.slice(currentIndex, currentIndex + length)
-      );
-
       currentIndex += length;
     }
 
-    textFrame.setRangeListOptions(0, textFrame.characters.length, {
-      type: p.isList ? 'UNORDERED' : 'NONE',
-    });
-    textFrame.fontSize = 36;
-    textFrame.listSpacing = 25;
     textFrame.fills = [
       { type: 'SOLID', color: { r: 0.439, g: 0.494, b: 0.682 } },
     ];
-    textFrame.lineHeight = {
-      value: 120,
-      unit: 'PERCENT',
-    };
+    if (number === 1) {
+      textFrame.fontSize = 48;
+      textFrame.lineHeight = {
+        value: 100,
+        unit: 'PERCENT',
+      };
+    } else {
+      textFrame.setRangeListOptions(0, textFrame.characters.length, {
+        type: p.isList ? 'UNORDERED' : 'NONE',
+      });
+      textFrame.fontSize = 36;
+      textFrame.listSpacing = 25;
+      textFrame.lineHeight = {
+        value: 120,
+        unit: 'PERCENT',
+      };
+    }
 
     bodyFrame.appendChild(textFrame);
     textFrame.layoutSizingHorizontal = 'FILL';
     textFrame.layoutSizingVertical = 'HUG';
   }
-
-  bodyFrame.layoutSizingHorizontal = 'FILL';
-  bodyFrame.layoutSizingVertical = 'FILL';
-  bodyFrame.counterAxisAlignItems = 'CENTER';
 }
 
 async function createImageFrames(
