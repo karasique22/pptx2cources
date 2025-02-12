@@ -411,9 +411,10 @@ async function createImageFrames(
   let picFrame;
   if (images.length > 1) {
     picFrame = figma.createFrame();
+    picFrame.name = 'picFrame';
     bodyFrame.appendChild(picFrame);
     picFrame.layoutMode = 'HORIZONTAL';
-    picFrame.layoutSizingHorizontal = 'FIXED';
+    picFrame.layoutSizingHorizontal = 'HUG';
     picFrame.layoutSizingVertical = 'FILL';
     picFrame.itemSpacing = 30;
   }
