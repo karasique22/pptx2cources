@@ -1,23 +1,23 @@
 <style>
-	body {
-		font-family: sans-serif;
-	}
+  body {
+    font-family: sans-serif;
+  }
 
-	#submit {
-		margin: 10px auto;
-		background-color: pink;
-		border: 1px solid black;
-		border-radius: 4px;
-		cursor: pointer;
-	}
+  #submit {
+    margin: 10px auto;
+    background-color: pink;
+    border: 1px solid black;
+    border-radius: 4px;
+    cursor: pointer;
+  }
 
-	#submit:hover {
-		background-color: lightpink;
-	}
+  #submit:hover {
+    background-color: lightpink;
+  }
 
-	#submit:active {
-		background-color: rgb(255, 129, 150);
-	}
+  #submit:active {
+    background-color: rgb(255, 129, 150);
+  }
 </style>
 
 <h2 style="text-align: center">pptx2curces)</h2>
@@ -25,33 +25,36 @@
 <button id="submit" type="submit">Запустить торпеду</button>
 
 <script>
-	const submitButton = document.querySelector("#submit");
-	const load = document.querySelector("#load");
+  const submitButton = document.querySelector('#submit');
+  const load = document.querySelector('#load');
 
-	submitButton.addEventListener("click", e => {
-		const files = load.files;
-		let x = 0;
+  submitButton.addEventListener('click', async (e) => {
+    const files = load.files;
+    let x = 0;
 
-		for (const file of files) {
-			const reader = new FileReader();
+    for (const file of files) {
+      const reader = new FileReader();
 
-			reader.onload = () => {
-				const content = reader.result;
+      await new Promise((resolve) => {
+        reader.onload = () => {
+          const content = reader.result;
 
-				parent.postMessage(
-					{
-						pluginMessage: {
-							type: "file",
-							data: content,
-							name: file.name,
-							posX: x,
-						},
-					},
-					"*"
-				);
-				x += 2160;
-			};
-			reader.readAsArrayBuffer(file);
-		}
-	});
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'file',
+                data: content,
+                name: file.name,
+                posX: x,
+              },
+            },
+            '*'
+          );
+          x += 2160;
+          resolve();
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+  });
 </script>
