@@ -427,27 +427,44 @@ async function createImageFrames(
       const imageType: string = imagePath.split('.').pop() || '';
 
       if (['png', 'jpeg', 'jpg'].includes(imageType)) {
-        const image = figma.createImage(imageData);
-        const { width, height } = await image.getSizeAsync();
-        const ratio = width / height;
+        try {
+          const image = figma.createImage(imageData);
+          const { width, height } = await image.getSizeAsync();
+          const ratio = width / height;
 
-        const imageNode = figma.createRectangle();
-        imageNode.cornerRadius = 30;
+          const imageNode = figma.createRectangle();
+          imageNode.cornerRadius = 30;
 
-        picFrame
-          ? picFrame.appendChild(imageNode)
-          : bodyFrame.appendChild(imageNode);
+          picFrame
+            ? picFrame.appendChild(imageNode)
+            : bodyFrame.appendChild(imageNode);
 
-        imageNode.layoutSizingVertical = 'FILL';
-        imageNode.resize(imageNode.height * ratio, imageNode.height);
+          imageNode.layoutSizingVertical = 'FILL';
+          imageNode.resize(imageNode.height * ratio, imageNode.height);
 
-        imageNode.fills = [
-          {
-            type: 'IMAGE',
-            scaleMode: 'FIT',
-            imageHash: image.hash,
-          },
-        ];
+          imageNode.fills = [
+            {
+              type: 'IMAGE',
+              scaleMode: 'FIT',
+              imageHash: image.hash,
+            },
+          ];
+        } catch (error: any) {
+          const errorText = figma.createText();
+          errorText.fontName = { family: 'Roboto', style: 'ExtraBold' };
+          errorText.fontSize = 64;
+          errorText.fills = [
+            {
+              type: 'SOLID',
+              color: { r: 1, g: 0, b: 0 },
+            },
+          ];
+          errorText.characters = `Ошибка: ${error.message}`;
+
+          picFrame
+            ? picFrame.appendChild(errorText)
+            : bodyFrame.appendChild(errorText);
+        }
       } else {
         console.error(`Unsupported image type: ${imageType}`);
       }
