@@ -323,7 +323,7 @@ async function createTitleFrame(
     titleText.fills = [
       {
         type: 'SOLID',
-        color: { r: 0.176, g: 0.212, b: 0.455 },
+        color: { r: 0.168, g: 0.212, b: 0.454 },
       },
     ];
   }
