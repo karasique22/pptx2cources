@@ -137,21 +137,27 @@ function extractTextData(slideData: any): {
   title: string;
   paragraphs: ParagraphItem[];
 } {
-  let title = '';
   const paragraphs: ParagraphItem[] = [];
 
   const shapes =
     slideData?.['p:sld']?.['p:cSld']?.[0]?.['p:spTree']?.[0]?.['p:sp'] || [];
-  title =
-    shapes.find(
-      (shape: any) =>
-        shape?.['p:nvSpPr']?.[0]?.['p:nvPr']?.[0]?.[
-          'p:ph'
-        ]?.[0]?.$?.type.includes('title') ||
-        shape?.['p:nvSpPr']?.[0]?.['p:nvPr']?.[0]?.[
-          'p:ph'
-        ]?.[0]?.$?.type.includes('ctrTitle')
-    )?.['p:txBody']?.[0]?.['a:p']?.[0]?.['a:r']?.[0]?.['a:t']?.[0] || '';
+
+  function findTitle(shapes: any[]): string {
+    for (const shape of shapes) {
+      const nvSpPr = shape['p:nvSpPr']?.[0];
+      const phType = nvSpPr?.['p:nvPr']?.[0]?.['p:ph']?.[0]?.$?.type;
+
+      if (phType && (phType.includes('title') || phType.includes('ctrTitle'))) {
+        return (
+          shape['p:txBody']?.[0]?.['a:p']?.[0]?.['a:r']?.[0]?.['a:t']?.[0] || ''
+        );
+      }
+    }
+    return '';
+  }
+
+  const title = findTitle(shapes);
+
   for (const shape of shapes) {
     const textBody = shape?.['p:txBody'];
     if (textBody) {
